@@ -1,3 +1,5 @@
+"use client";
+
 import { ethers } from "ethers";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FhevmInstance } from "./fhevmTypes";

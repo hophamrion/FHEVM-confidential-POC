@@ -1,0 +1,177 @@
+"use client";
+
+import { BalanceCard } from "@/components/BalanceCard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useMetaMaskEthersSigner } from "@/hooks/metamask/useMetaMaskEthersSigner";
+import { useConfidentialToken } from "@/hooks/useConfidentialToken";
+import { useFhevm } from "@/fhevm/useFhevm";
+import { useMetaMask } from "@/hooks/metamask/useMetaMaskProvider";
+import { useInMemoryStorage } from "@/hooks/useInMemoryStorage";
+import { 
+  Activity, 
+  TrendingUp, 
+  Shield, 
+  Lock,
+  Info
+} from "lucide-react";
+
+export default function OverviewPage() {
+  const { provider, chainId } = useMetaMask();
+  const { ethersSigner } = useMetaMaskEthersSigner();
+  const { instance } = useFhevm({ provider, chainId });
+  const fhevmDecryptionSignatureStorage = useInMemoryStorage();
+  
+  const sameChain = { current: (id: number | undefined) => id === chainId };
+  const sameSigner = { current: (signer: any) => signer === ethersSigner };
+
+  const { contractAddress, isDeployed } = useConfidentialToken({
+    instance,
+    fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
+    eip1193Provider: provider,
+    chainId,
+    ethersSigner,
+    ethersReadonlyProvider: ethersSigner,
+    sameChain,
+    sameSigner,
+  });
+
+  // Check if current user is owner
+  const isOwner = ethersSigner?.address === "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
+        <p className="text-muted-foreground">
+          Your confidential token dashboard and activity overview.
+        </p>
+      </div>
+
+      {/* Balance Card */}
+      <BalanceCard />
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Contract Status */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Contract Status</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <Badge variant={isDeployed ? "default" : "destructive"}>
+                {isDeployed ? "Deployed" : "Not Deployed"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {contractAddress ? `Deployed at ${contractAddress.slice(0, 6)}...${contractAddress.slice(-4)}` : "No contract address"}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* User Role */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Your Role</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <Badge variant={isOwner ? "default" : "secondary"}>
+                {isOwner ? "Owner" : "User"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isOwner ? "Can mint new tokens" : "Can send and receive tokens"}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Privacy Level */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Privacy Level</CardTitle>
+            <Lock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <Badge variant="default">Maximum</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              All amounts encrypted with FHE
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Token Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Info className="h-5 w-5" />
+            <span>Token Information</span>
+          </CardTitle>
+          <CardDescription>
+            Details about the Confidential Token contract.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <label className="text-xs text-muted-foreground">Token Name</label>
+              <p className="font-medium">ConfidentialToken</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Symbol</label>
+              <p className="font-medium">CT</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Decimals</label>
+              <p className="font-medium">6</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Standard</label>
+              <p className="font-medium">ERC-7984</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Network</label>
+              <p className="font-medium">
+                {chainId === 1 ? "Ethereum Mainnet" : 
+                 chainId === 11155111 ? "Sepolia Testnet" : 
+                 chainId === 31337 ? "Hardhat Local" : 
+                 `Chain ${chainId}`}
+              </p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Encryption</label>
+              <p className="font-medium">FHEVM (euint64)</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Activity Feed Placeholder */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Activity className="h-5 w-5" />
+            <span>Recent Activity</span>
+          </CardTitle>
+          <CardDescription>
+            Your recent confidential token transactions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No recent activity</p>
+            <p className="text-sm">Start by minting or transferring tokens</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
