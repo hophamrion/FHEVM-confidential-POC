@@ -1,0 +1,19 @@
+{
+  "name": "root",
+  "private": true,
+  "version": "0.3.0",
+  "license": "BSD-3-Clause-Clear",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "preinstall": "node ./scripts/preinstall.mjs",
+    "postinstall": "echo 'Skipping genabi for now - run manually after deployment'"
+  },
+  "dependencies": {
+    "@openzeppelin/confidential-contracts": "^0.2.0"
+  }
+}
