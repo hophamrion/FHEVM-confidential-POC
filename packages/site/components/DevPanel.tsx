@@ -54,6 +54,12 @@ export function DevPanel() {
     isRefreshing,
     isInitializing,
     isDeployed,
+    isOwner,
+    contractOwner,
+    currentSlug,
+    setCurrentSlug,
+    availableSlugs,
+    setAvailableSlugs,
   } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
@@ -65,8 +71,6 @@ export function DevPanel() {
     sameSigner,
   });
 
-  // Check if current user is owner (simplified)
-  const isOwner = ethersSigner?.address === "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
   const handleAddressChange = (value: string) => {
     setTestAddress(value);
@@ -119,6 +123,61 @@ export function DevPanel() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <Label className="text-xs text-muted-foreground">Registry Slug</Label>
+              <div className="flex items-center space-x-2">
+                <select
+                  value={currentSlug}
+                  onChange={(e) => setCurrentSlug(e.target.value)}
+                  className="text-xs h-8 px-2 border rounded bg-background"
+                >
+                  {availableSlugs.map((slug) => (
+                    <option key={slug} value={slug}>
+                      {slug}
+                    </option>
+                  ))}
+                  <option value="custom">Custom...</option>
+                </select>
+                {currentSlug === "custom" && (
+                  <Input
+                    value={currentSlug}
+                    onChange={(e) => setCurrentSlug(e.target.value)}
+                    className="text-xs h-8"
+                    placeholder="Enter custom slug"
+                  />
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Found {availableSlugs.length} slug(s): {availableSlugs.join(", ")}
+              </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <Input
+                  placeholder="Add new slug to check"
+                  className="text-xs h-6"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      const newSlug = e.currentTarget.value.trim();
+                      if (newSlug && !availableSlugs.includes(newSlug)) {
+                        // Add to available slugs temporarily
+                        setAvailableSlugs([...availableSlugs, newSlug]);
+                        e.currentTarget.value = '';
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-6"
+                  onClick={() => {
+                    // Refresh slugs from registry
+                    window.location.reload();
+                  }}
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
             <div>
               <Label className="text-xs text-muted-foreground">Contract Address</Label>
               <div className="flex items-center space-x-2">

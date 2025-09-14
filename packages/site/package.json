@@ -15,6 +15,7 @@
     "dev-webpack": "npm run clean && next dev",
     "genabi": "node ./scripts/genabi.mjs",
     "genabi:confidential": "node ./scripts/genabiConfidentialToken.mjs",
+    "load-artifacts": "node ./scripts/loadContractArtifacts.mjs",
     "ishhrunning": "node ./scripts/is-hardhat-node-running.mjs",
     "build": "next build",
     "start": "next start",

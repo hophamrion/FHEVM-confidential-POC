@@ -19,7 +19,8 @@ import {
   Settings, 
   Code,
   Lock,
-  Clock
+  Clock,
+  Rocket
 } from "lucide-react";
 
 const navigation = [
@@ -28,6 +29,7 @@ const navigation = [
   { name: "Mint", href: "/mint", icon: Plus, description: "Create tokens", ownerOnly: true },
   { name: "Burn", href: "/burn", icon: Minus, description: "Destroy tokens", comingSoon: true },
   { name: "Allowance", href: "/allowance", icon: Shield, description: "Approve spending", comingSoon: true },
+  { name: "Deploy", href: "/deploy", icon: Rocket, description: "Deploy contract" },
   { name: "Observers", href: "/observers", icon: Eye, description: "Grant view access", comingSoon: true },
   { name: "Advanced", href: "/advanced", icon: Settings, description: "Strict mode & Supply", comingSoon: true },
   { name: "Developer", href: "/developer", icon: Code, description: "Debug & Logs" },
@@ -44,7 +46,7 @@ export function Sidebar() {
   const sameChain = { current: (id: number | undefined) => id === chainId };
   const sameSigner = { current: (signer: any) => signer === ethersSigner };
 
-  const { contractAddress, isDeployed } = useConfidentialToken({
+  const { contractAddress, isDeployed, isOwner } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
     eip1193Provider: provider,
@@ -54,9 +56,6 @@ export function Sidebar() {
     sameChain,
     sameSigner,
   });
-
-  // Check if current user is owner (simplified - in real app you'd check against contract)
-  const isOwner = ethersSigner?.address === "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // Hardhat account 0
 
   const handleNavigation = (href: string, comingSoon: boolean = false) => {
     if (comingSoon) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ export function MintForm() {
 
   const { provider, chainId } = useMetaMask();
   const { ethersSigner } = useMetaMaskEthersSigner();
-  const { instance } = useFhevm({ provider, chainId });
+  const { instance, status: fhevmStatus } = useFhevm({ provider, chainId });
   const fhevmDecryptionSignatureStorage = useInMemoryStorage();
   
   const sameChain = { current: (id: number | undefined) => id === chainId };
@@ -39,9 +39,12 @@ export function MintForm() {
     contractAddress,
     canMint,
     mintConfidential,
+    mintConfidentialFallback,
     isMinting,
     message,
     isDeployed,
+    isOwner,
+    contractOwner,
   } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
@@ -52,9 +55,6 @@ export function MintForm() {
     sameChain,
     sameSigner,
   });
-
-  // Check if current user is owner (simplified - in real app you'd check against contract)
-  const isOwner = ethersSigner?.address === "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // Hardhat account 0
 
   const handleAddressChange = (value: string) => {
     setToAddress(value);
@@ -75,10 +75,14 @@ export function MintForm() {
 
   const handleMint = () => {
     const amountNum = parseFloat(amount);
-    if (amountNum > 0 && isValidAddress && toAddress && ethersSigner) {
+    if (amountNum > 0 && isValidAddress && toAddress && ethersSigner && fhevmStatus === "ready") {
+      console.log("[MintForm] Calling mintConfidential");
       mintConfidential(toAddress, amountNum);
+    } else {
+      console.log("[MintForm] Cannot mint:", { amountNum, isValidAddress, toAddress, ethersSigner: !!ethersSigner, fhevmStatus });
     }
   };
+
 
   const handleMintToSelf = () => {
     if (ethersSigner?.address) {
@@ -94,6 +98,63 @@ export function MintForm() {
     isValidAddress && 
     canMint && 
     isOwner;
+
+  // Debug log
+  console.log("[MintForm] Form validation:", {
+    toAddress: !!toAddress,
+    amount: !!amount,
+    amountValid: parseFloat(amount) > 0,
+    isValidAddress,
+    canMint,
+    isOwner,
+    fhevmStatus,
+    isFormValid
+  });
+
+
+  // Only show FHEVM loading for actual mint operations, not for owner check
+  if (fhevmStatus !== "ready" && isOwner) {
+    const getStatusMessage = () => {
+      switch (fhevmStatus) {
+        case "loading": return "Loading cryptographic parameters...";
+        case "idle": return "Setting up FHEVM instance...";
+        case "error": return "Failed to initialize. Please refresh the page.";
+        default: return "Initializing confidential token environment...";
+      }
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Lock className="h-5 w-5 text-muted-foreground animate-pulse" />
+            <span>Initializing...</span>
+          </CardTitle>
+          <CardDescription>
+            {getStatusMessage()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-2">
+                <p>Setting up FHEVM (Fully Homomorphic Encryption Virtual Machine)...</p>
+                <div className="text-sm text-muted-foreground">
+                  <p>• Loading cryptographic libraries</p>
+                  <p>• Connecting to FHEVM coprocessor</p>
+                  <p>• Initializing encryption context</p>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  FHEVM is only needed for actual minting operations. Owner check is already complete.
+                </p>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!isDeployed) {
     return (
@@ -222,6 +283,7 @@ export function MintForm() {
               </>
             )}
           </Button>
+
         </div>
 
         {/* Status Messages */}

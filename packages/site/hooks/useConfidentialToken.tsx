@@ -37,6 +37,9 @@ type ConfidentialTokenInfoType = {
 */
 import { ConfidentialTokenFixedAddresses } from "@/abi/ConfidentialTokenFixedAddresses";
 import { ConfidentialTokenFixedABI } from "@/abi/ConfidentialTokenFixedABI";
+import { ConfidentialTokenExtendedABI } from "../abi/ConfidentialTokenExtendedABI";
+import { CTRegistryABI } from "@/abi/CTRegistryABI";
+import { CTRegistryAddresses } from "@/abi/CTRegistryAddresses";
 
 /**
  * Resolves ConfidentialToken contract metadata for the given EVM `chainId`.
@@ -58,9 +61,13 @@ function getConfidentialTokenByChainId(
   chainId: number | undefined
 ): ConfidentialTokenInfoType {
   if (!chainId) {
-    return { abi: ConfidentialTokenFixedABI.abi };
+    return { abi: ConfidentialTokenExtendedABI.abi };
   }
 
+  // Registry lookup will be handled by the hook when needed
+  // No localStorage dependency anymore
+
+  // Fallback to generated addresses (deployed from Hardhat)
   const entry =
     ConfidentialTokenFixedAddresses[chainId.toString() as keyof typeof ConfidentialTokenFixedAddresses];
 
@@ -72,8 +79,46 @@ function getConfidentialTokenByChainId(
     address: entry?.address as `0x${string}` | undefined,
     chainId: entry?.chainId ?? chainId,
     chainName: entry?.chainName,
-    abi: ConfidentialTokenFixedABI.abi,
+    abi: ConfidentialTokenExtendedABI.abi,
   };
+}
+
+function getNetworkName(chainId: number): string {
+  switch (chainId) {
+    case 1: return "Ethereum Mainnet";
+    case 11155111: return "Sepolia Testnet";
+    case 31337: return "Hardhat Local";
+    default: return `Chain ${chainId}`;
+  }
+}
+
+/**
+ * Lookup contract address from Registry
+ */
+async function lookupFromRegistry(
+  ownerAddress: string,
+  slug: string = "main",
+  chainId: number,
+  provider: any
+): Promise<string | null> {
+  try {
+    const registryEntry = CTRegistryAddresses[chainId.toString() as keyof typeof CTRegistryAddresses];
+    if (!registryEntry || registryEntry.address === "0x0000000000000000000000000000000000000000") {
+      return null;
+    }
+
+    const registry = new (await import("ethers")).Contract(
+      registryEntry.address,
+      CTRegistryABI.abi,
+      provider
+    );
+
+    const tokenAddress = await registry.latest(ownerAddress, slug);
+    return tokenAddress;
+  } catch (error) {
+    console.error("Registry lookup failed:", error);
+    return null;
+  }
 }
 
 /**
@@ -121,6 +166,12 @@ export const useConfidentialToken = (parameters: {
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
+  const [lookedUpTokenAddress, setLookedUpTokenAddress] = useState<string | null>(null);
+  const [contractOwner, setContractOwner] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState<boolean>(false);
+  const [currentSlug, setCurrentSlug] = useState<string>("tomcat2389");
+  const [debouncedSlug, setDebouncedSlug] = useState<string>("tomcat2389");
+  const [availableSlugs, setAvailableSlugs] = useState<string[]>([]);
 
   const confidentialTokenRef = useRef<ConfidentialTokenInfoType | undefined>(undefined);
   const isRefreshingRef = useRef<boolean>(isRefreshing);
@@ -131,11 +182,33 @@ export const useConfidentialToken = (parameters: {
 
   const isDecrypted = balanceHandle && balanceHandle === clearBalance?.handle;
 
+  // Debounce slug changes to avoid too many registry lookups
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSlug(currentSlug);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [currentSlug]);
+
   //////////////////////////////////////////////////////////////////////////////
   // ConfidentialToken Contract
   //////////////////////////////////////////////////////////////////////////////
 
   const confidentialToken = useMemo(() => {
+    // If we have a looked up token address from registry, use it
+    if (lookedUpTokenAddress) {
+      const c = {
+        address: lookedUpTokenAddress as `0x${string}`,
+        chainId: chainId!,
+        chainName: getNetworkName(chainId!),
+        abi: ConfidentialTokenExtendedABI.abi,
+      };
+      confidentialTokenRef.current = c;
+      return c;
+    }
+
+    // Otherwise, use the default lookup
     const c = getConfidentialTokenByChainId(chainId);
     confidentialTokenRef.current = c;
 
@@ -144,7 +217,171 @@ export const useConfidentialToken = (parameters: {
     }
 
     return c;
-  }, [chainId]);
+  }, [chainId, lookedUpTokenAddress]);
+
+  // List all slugs for a user
+  const listUserSlugs = useCallback(async (ownerAddress: string) => {
+    if (!chainId || !ethersReadonlyProvider) return [];
+    
+    try {
+      const registryEntry = CTRegistryAddresses[chainId.toString() as keyof typeof CTRegistryAddresses];
+      if (!registryEntry || registryEntry.address === "0x0000000000000000000000000000000000000000") {
+        return [];
+      }
+
+      const registry = new (await import("ethers")).Contract(
+        registryEntry.address,
+        CTRegistryABI.abi,
+        ethersReadonlyProvider
+      );
+
+      // Try common slugs
+      const commonSlugs = ["main", "tomcat2389", "test", "dev", "prod", "contract1", "contract2", "mycontract", "token1", "token2"];
+      const foundSlugs: string[] = [];
+      
+      for (const slug of commonSlugs) {
+        try {
+          const count = await registry.count(ownerAddress, slug);
+          console.log(`[Registry] Slug "${slug}": ${count} versions`);
+          if (count > 0) {
+            foundSlugs.push(slug);
+            // Get latest contract address for this slug
+            try {
+              const latest = await registry.latest(ownerAddress, slug);
+              console.log(`[Registry] Latest contract for "${slug}": ${latest}`);
+            } catch (error) {
+              console.log(`[Registry] Failed to get latest for "${slug}":`, error);
+            }
+          }
+        } catch (error) {
+          // Ignore errors for non-existent slugs
+        }
+      }
+      
+      return foundSlugs;
+    } catch (error) {
+      console.error("[Registry] Failed to list slugs:", error);
+      return [];
+    }
+  }, [chainId, ethersReadonlyProvider]);
+
+  // Lookup contract from Registry
+  const lookupFromRegistry = useCallback(async (ownerAddress: string, slug: string = "main") => {
+    if (!chainId || !ethersReadonlyProvider) return null;
+    
+    try {
+      const registryEntry = CTRegistryAddresses[chainId.toString() as keyof typeof CTRegistryAddresses];
+      if (!registryEntry || registryEntry.address === "0x0000000000000000000000000000000000000000") {
+        console.log("[Registry] No registry entry found for chainId:", chainId);
+        return null;
+      }
+
+      console.log("[Registry] Looking up:", {
+        registryAddress: registryEntry.address,
+        ownerAddress: ownerAddress,
+        slug: slug,
+        chainId: chainId
+      });
+
+      const registry = new (await import("ethers")).Contract(
+        registryEntry.address,
+        CTRegistryABI.abi,
+        ethersReadonlyProvider
+      );
+
+      try {
+        const tokenAddress = await registry.latest(ownerAddress, slug);
+        console.log("[Registry] Found contract:", tokenAddress);
+        return tokenAddress;
+      } catch (error: any) {
+        // If no entry found, return null instead of throwing
+        if (error.message?.includes("No entry") || error.code === "BAD_DATA") {
+          console.log("[Registry] No contract found for owner:", ownerAddress, "slug:", slug);
+          return null;
+        }
+        console.error("[Registry] Lookup error:", error);
+        throw error;
+      }
+    } catch (error) {
+      console.error("[Registry] Registry lookup failed:", error);
+      return null;
+    }
+  }, [chainId, ethersReadonlyProvider]);
+
+  // Load available slugs when user address is available
+  useEffect(() => {
+    if (ethersSigner?.address && chainId) {
+      // Try to load from localStorage first
+      const cacheKey = `slugs_${ethersSigner.address}_${chainId}`;
+      const cachedSlugs = localStorage.getItem(cacheKey);
+      
+      if (cachedSlugs) {
+        try {
+          const parsed = JSON.parse(cachedSlugs);
+          setAvailableSlugs(parsed);
+          console.log("[useConfidentialToken] Loaded cached slugs:", parsed);
+        } catch (error) {
+          console.error("[useConfidentialToken] Failed to parse cached slugs:", error);
+        }
+      }
+      
+      // Always fetch fresh data
+      listUserSlugs(ethersSigner.address).then((slugs) => {
+        setAvailableSlugs(slugs);
+        console.log("[useConfidentialToken] Available slugs:", slugs);
+        
+        // Cache the results
+        localStorage.setItem(cacheKey, JSON.stringify(slugs));
+      });
+    }
+  }, [ethersSigner?.address, chainId, listUserSlugs]);
+
+  // Try to lookup from Registry when user address is available
+  useEffect(() => {
+    if (ethersSigner?.address && chainId) {
+      console.log("[useConfidentialToken] Looking up contract from Registry...");
+      console.log("[useConfidentialToken] Account:", ethersSigner.address);
+      console.log("[useConfidentialToken] Slug:", debouncedSlug);
+      lookupFromRegistry(ethersSigner.address, debouncedSlug).then((address) => {
+        if (address && address !== "0x0000000000000000000000000000000000000000") {
+          console.log("[useConfidentialToken] Found contract in Registry:", address);
+          setLookedUpTokenAddress(address);
+          // Force update confidentialTokenRef
+          confidentialTokenRef.current = {
+            address: address as `0x${string}`,
+            chainId: chainId,
+            chainName: getNetworkName(chainId),
+            abi: ConfidentialTokenExtendedABI.abi,
+          };
+          // Clear any error messages
+          setMessage("");
+          
+          // Check if current user is owner
+          if (ethersReadonlyProvider) {
+            (async () => {
+              try {
+                const { Contract } = await import("ethers");
+                const contract = new Contract(
+                  address,
+                  ConfidentialTokenFixedABI.abi,
+                  ethersReadonlyProvider
+                );
+                const owner = await contract.owner();
+                setContractOwner(owner);
+                setIsOwner(owner.toLowerCase() === ethersSigner.address.toLowerCase());
+                console.log("[useConfidentialToken] Contract owner:", owner);
+                console.log("[useConfidentialToken] Is current user owner:", owner.toLowerCase() === ethersSigner.address.toLowerCase());
+              } catch (error) {
+                console.error("[useConfidentialToken] Failed to get owner:", error);
+              }
+            })();
+          }
+        } else {
+          console.log("[useConfidentialToken] No contract found in Registry for slug:", debouncedSlug);
+        }
+      });
+    }
+  }, [ethersSigner?.address, chainId, lookupFromRegistry, debouncedSlug]);
 
   //////////////////////////////////////////////////////////////////////////////
   // Contract Status
@@ -193,6 +430,27 @@ export const useConfidentialToken = (parameters: {
       confidentialTokenRef.current.abi,
       ethersReadonlyProvider
     );
+
+    // Debug: Log contract details
+    const abiFunctions = confidentialTokenRef.current.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name);
+    console.log("[DEBUG] Contract details:", {
+      address: thisTokenAddress,
+      chainId: thisChainId,
+      abiLength: confidentialTokenRef.current.abi.length,
+      hasGetEncryptedBalance: !!thisTokenContract.getEncryptedBalance,
+      abiFunctions: abiFunctions,
+      contractMethods: thisTokenContract.interface?.functions ? Object.getOwnPropertyNames(thisTokenContract.interface.functions) : "No interface.functions"
+    });
+
+    // Check if contract has getEncryptedBalance function
+    if (!thisTokenContract.getEncryptedBalance) {
+      console.error("[useConfidentialToken] Contract does not have getEncryptedBalance function");
+      console.error("[DEBUG] Available functions:", thisTokenContract.interface?.functions ? Object.getOwnPropertyNames(thisTokenContract.interface.functions) : "No interface.functions");
+      setMessage("Contract ABI mismatch - missing getEncryptedBalance function");
+      setIsRefreshing(false);
+      isRefreshingRef.current = false;
+      return;
+    }
 
     // Get encrypted balance handle
     thisTokenContract
@@ -286,28 +544,26 @@ export const useConfidentialToken = (parameters: {
 
       try {
         // 0) Ensure user has decrypt permission
-        const tokenContract = confidentialTokenRef.current;
-        if (!tokenContract) {
+        const tokenInfo = confidentialTokenRef.current;
+        if (!tokenInfo || !tokenInfo.address) {
           setMessage("No contract available");
           return;
         }
         
-        // Check if function exists and call it
-        if (typeof tokenContract.allowSelfBalanceDecrypt === 'function') {
+        // Create contract instance to call allowSelfBalanceDecrypt
+        const tokenContract = new ethers.Contract(
+          tokenInfo.address,
+          tokenInfo.abi,
+          thisEthersSigner
+        );
+        
+        // Call allowSelfBalanceDecrypt function
           console.log("Calling allowSelfBalanceDecrypt...");
+          if (!tokenContract.allowSelfBalanceDecrypt) {
+            throw new Error("Contract does not have allowSelfBalanceDecrypt function");
+          }
           await tokenContract.allowSelfBalanceDecrypt();
           console.log("allowSelfBalanceDecrypt completed");
-        } else {
-          console.log("allowSelfBalanceDecrypt not available, trying to find alternative...");
-          // Try alternative function names
-          if (typeof tokenContract.allowSelfBalanceDecrypt === 'function') {
-            await tokenContract.allowSelfBalanceDecrypt();
-          } else if (typeof tokenContract.allowBalanceDecrypt === 'function') {
-            await tokenContract.allowBalanceDecrypt();
-          } else {
-            console.log("No allow function found, proceeding without permission...");
-          }
-        }
 
         // 1) Generate temporary keypair & EIP-712
         const keypair = instance.generateKeypair();
@@ -421,6 +677,9 @@ export const useConfidentialToken = (parameters: {
         !sameSigner.current(thisEthersSigner);
 
       try {
+        if (!tokenContract.initializeAddress) {
+          throw new Error("Contract does not have initializeAddress function");
+        }
         const tx = await tokenContract.initializeAddress(address);
         setMessage(`Wait for tx:${tx.hash}...`);
 
@@ -461,17 +720,24 @@ export const useConfidentialToken = (parameters: {
       confidentialToken.address &&
       instance &&
       ethersSigner &&
+      isOwner &&
       !isRefreshing &&
       !isMinting
     );
-  }, [confidentialToken.address, instance, ethersSigner, isRefreshing, isMinting]);
+  }, [confidentialToken.address, instance, ethersSigner, isOwner, isRefreshing, isMinting]);
 
   const mintConfidential = useCallback((to: string, amount: number) => {
     if (isRefreshingRef.current || isMintingRef.current) {
       return;
     }
 
-    if (!confidentialToken.address || !instance || !ethersSigner || amount <= 0) {
+    if (!confidentialToken.address || !ethersSigner || amount <= 0) {
+      setMessage("Missing required parameters for minting");
+      return;
+    }
+
+    if (!instance) {
+      setMessage("FHEVM instance not ready. Please wait for initialization or use bypass mode.");
       return;
     }
 
@@ -537,6 +803,23 @@ export const useConfidentialToken = (parameters: {
 
         setMessage(`Call mintConfidential...`);
 
+        // Debug: Log contract details for mint
+        const abiFunctions = confidentialTokenRef.current.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name);
+        console.log("[DEBUG] Mint contract details:", {
+          address: thisTokenAddress,
+          chainId: thisChainId,
+          abiLength: confidentialTokenRef.current.abi.length,
+          hasMintConfidential: !!tokenContract.mintConfidential,
+          abiFunctions: abiFunctions,
+          contractMethods: tokenContract.interface?.functions ? Object.getOwnPropertyNames(tokenContract.interface.functions) : "No interface.functions"
+        });
+
+        // Check if contract has mintConfidential function
+        if (!tokenContract.mintConfidential) {
+          console.error("[DEBUG] Available functions:", tokenContract.interface?.functions ? Object.getOwnPropertyNames(tokenContract.interface.functions) : "No interface.functions");
+          throw new Error("Contract does not have mintConfidential function");
+        }
+
         const tx = await tokenContract.mintConfidential(
           to,
           enc.handles[0],
@@ -570,6 +853,67 @@ export const useConfidentialToken = (parameters: {
     instance,
     chainId,
     refreshBalanceHandle,
+    sameChain,
+    sameSigner,
+  ]);
+
+  // Fallback mint function without FHEVM (for testing)
+  const mintConfidentialFallback = useCallback((to: string, amount: number) => {
+    if (isRefreshingRef.current || isMintingRef.current) {
+      return;
+    }
+
+    if (!confidentialToken.address || !ethersSigner || amount <= 0) {
+      setMessage("Missing required parameters for minting");
+      return;
+    }
+
+    const thisChainId = chainId;
+    const thisTokenAddress = confidentialToken.address;
+    const thisEthersSigner = ethersSigner;
+
+    const tokenContract = new ethers.Contract(
+      thisTokenAddress,
+      confidentialToken.abi,
+      thisEthersSigner
+    );
+
+    isMintingRef.current = true;
+    setIsMinting(true);
+    setMessage(`[FALLBACK] Testing mint connection...`);
+
+    const run = async () => {
+      try {
+        // Try to call a simple function first to test connection
+        if (!tokenContract.owner) {
+          throw new Error("Contract does not have owner function");
+        }
+        const owner = await tokenContract.owner();
+        console.log("[FALLBACK] Contract owner:", owner);
+        
+        if (owner.toLowerCase() !== thisEthersSigner.address.toLowerCase()) {
+          setMessage("You are not the contract owner");
+          return;
+        }
+
+        // For now, just show success message
+        setMessage(`[FALLBACK] Connection OK! Would mint ${amount} tokens to ${to}. FHEVM required for actual minting.`);
+        
+      } catch (e: any) {
+        setMessage(`[FALLBACK] Connection test failed: ${e.message}`);
+        console.error("[FALLBACK] Error:", e);
+      } finally {
+        isMintingRef.current = false;
+        setIsMinting(false);
+      }
+    };
+
+    run();
+  }, [
+    ethersSigner,
+    confidentialToken.address,
+    confidentialToken.abi,
+    chainId,
     sameChain,
     sameSigner,
   ]);
@@ -647,6 +991,11 @@ export const useConfidentialToken = (parameters: {
 
         setMessage(`Call transferConfidential...`);
 
+        // Check if contract has transferConfidential function
+        if (!tokenContract.transferConfidential) {
+          throw new Error("Contract does not have transferConfidential function");
+        }
+
         const tx = await tokenContract.transferConfidential(
           to,
           enc.handles[0],
@@ -702,6 +1051,7 @@ export const useConfidentialToken = (parameters: {
     canTransfer,
     initializeAddress,
     mintConfidential,
+    mintConfidentialFallback,
     transferConfidential,
     decryptBalanceHandle,
     refreshBalanceHandle,
@@ -716,5 +1066,11 @@ export const useConfidentialToken = (parameters: {
     isTransferring,
     isInitializing,
     isDeployed,
+    isOwner,
+    contractOwner,
+    currentSlug,
+    setCurrentSlug,
+    availableSlugs,
+    setAvailableSlugs,
   };
 };
