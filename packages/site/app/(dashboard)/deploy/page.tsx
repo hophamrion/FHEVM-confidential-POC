@@ -236,7 +236,7 @@ export default function DeployPage() {
       setMessage("Setting up Factory as registrar...");
       
       // Set factory as registrar
-      const setRegistrarTx = await registry.setRegistrar(factoryAddress, true);
+      const setRegistrarTx = await (registry as any).setRegistrar(factoryAddress, true);
       await setRegistrarTx.wait();
 
       setMessage(`✅ Infrastructure deployed successfully!`);
