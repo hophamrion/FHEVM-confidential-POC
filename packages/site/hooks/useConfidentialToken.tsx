@@ -71,7 +71,7 @@ function getConfidentialTokenByChainId(
   const entry =
     ConfidentialTokenFixedAddresses[chainId.toString() as keyof typeof ConfidentialTokenFixedAddresses];
 
-  if (!("address" in entry) || entry.address === ethers.ZeroAddress) {
+  if (!entry || !("address" in entry) || entry.address === ethers.ZeroAddress) {
     return { abi: ConfidentialTokenFixedABI.abi, chainId };
   }
 
