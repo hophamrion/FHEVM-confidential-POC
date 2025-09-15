@@ -12,6 +12,7 @@ import { useFhevm } from "@/fhevm/useFhevm";
 import { useMetaMask } from "@/hooks/metamask/useMetaMaskProvider";
 import { useMetaMaskEthersSigner } from "@/hooks/metamask/useMetaMaskEthersSigner";
 import { useInMemoryStorage } from "@/hooks/useInMemoryStorage";
+import { useTokenContext } from "@/contexts/TokenContext";
 import { parseUnits, isAddress } from "ethers";
 import { 
   Send, 
@@ -40,6 +41,7 @@ export function BatchTransferForm() {
   const { ethersSigner } = useMetaMaskEthersSigner();
   const { instance } = useFhevm({ provider, chainId });
   const fhevmDecryptionSignatureStorage = useInMemoryStorage();
+  const { tokenAddress } = useTokenContext();
   
   const sameChain = { current: (id: number | undefined) => id === chainId };
   const sameSigner = { current: (signer: any) => signer === ethersSigner };
@@ -56,6 +58,7 @@ export function BatchTransferForm() {
     ethersReadonlyProvider: ethersSigner,
     sameChain,
     sameSigner,
+    overrideTokenAddress: tokenAddress || undefined,
   });
 
   const parseCSV = (csv: string): BatchRow[] => {

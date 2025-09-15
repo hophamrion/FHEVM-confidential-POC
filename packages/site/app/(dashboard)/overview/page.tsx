@@ -1,19 +1,24 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { BalanceCard } from "@/components/BalanceCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useMetaMaskEthersSigner } from "@/hooks/metamask/useMetaMaskEthersSigner";
 import { useConfidentialToken } from "@/hooks/useConfidentialToken";
+import { useTokenContext } from "@/contexts/TokenContext";
 import { useFhevm } from "@/fhevm/useFhevm";
 import { useMetaMask } from "@/hooks/metamask/useMetaMaskProvider";
 import { useInMemoryStorage } from "@/hooks/useInMemoryStorage";
+import { JoinTokenForm } from "@/components/JoinTokenForm";
 import { 
   Activity, 
   TrendingUp, 
   Shield, 
   Lock,
-  Info
+  Info,
+  Plus
 } from "lucide-react";
 
 export default function OverviewPage() {
@@ -25,6 +30,14 @@ export default function OverviewPage() {
   const sameChain = { current: (id: number | undefined) => id === chainId };
   const sameSigner = { current: (signer: any) => signer === ethersSigner };
 
+  // Use global token context
+  const { 
+    tokenAddress, 
+    reason, 
+    isLoading: isResolving, 
+    setManually 
+  } = useTokenContext();
+
   const { contractAddress, isDeployed } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
@@ -34,6 +47,7 @@ export default function OverviewPage() {
     ethersReadonlyProvider: ethersSigner,
     sameChain,
     sameSigner,
+    overrideTokenAddress: tokenAddress || undefined,
   });
 
   // Check if current user is owner
@@ -49,8 +63,53 @@ export default function OverviewPage() {
         </p>
       </div>
 
-      {/* Balance Card */}
-      <BalanceCard />
+      {/* Token Resolution Status */}
+      {isResolving && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              <span className="text-sm text-muted-foreground">Resolving token address...</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Join Token Form - Show when no token address found */}
+      {!isResolving && !tokenAddress && (
+        <JoinTokenForm
+          onTokenAddressSet={setManually}
+          onOwnerSlugSet={async (owner, slug) => {
+            // This will be handled by the URL params in the next render
+            const url = new URL(window.location.href);
+            url.searchParams.set("owner", owner);
+            url.searchParams.set("slug", slug);
+            window.history.replaceState({}, "", url.toString());
+            return true;
+          }}
+          isLoading={isResolving}
+          currentChainId={chainId}
+          currentChainName={chainId ? `Chain ${chainId}` : undefined}
+        />
+      )}
+
+      {/* Token Resolution Info */}
+      {!isResolving && tokenAddress && reason && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">{reason}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Token: {tokenAddress.slice(0, 6)}...{tokenAddress.slice(-4)}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Balance Card - Only show when token is resolved */}
+      {tokenAddress && <BalanceCard overrideTokenAddress={tokenAddress} />}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

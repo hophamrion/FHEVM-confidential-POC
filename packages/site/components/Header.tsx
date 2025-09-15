@@ -9,13 +9,15 @@ import { useMetaMaskEthersSigner } from "@/hooks/metamask/useMetaMaskEthersSigne
 import { useConfidentialToken } from "@/hooks/useConfidentialToken";
 import { useFhevm } from "@/fhevm/useFhevm";
 import { useInMemoryStorage } from "@/hooks/useInMemoryStorage";
+import { useTokenContext } from "@/contexts/TokenContext";
 import { Copy, ExternalLink, Wallet, LogOut } from "lucide-react";
 
 export function Header() {
-  const { provider, chainId, connect, isConnected } = useMetaMask();
+  const { provider, chainId, connect, isConnected, error } = useMetaMask();
   const { ethersSigner } = useMetaMaskEthersSigner();
   const { instance } = useFhevm({ provider, chainId });
   const fhevmDecryptionSignatureStorage = useInMemoryStorage();
+  const { tokenAddress } = useTokenContext();
   
   const sameChain = { current: (id: number | undefined) => id === chainId };
   const sameSigner = { current: (signer: any) => signer === ethersSigner };
@@ -29,6 +31,7 @@ export function Header() {
     ethersReadonlyProvider: ethersSigner,
     sameChain,
     sameSigner,
+    overrideTokenAddress: tokenAddress || undefined,
   });
 
   const getNetworkName = (chainId: number | undefined) => {
@@ -119,10 +122,17 @@ export function Header() {
 
           {/* Wallet Connect */}
           {!isConnected ? (
-            <Button onClick={connect} className="flex items-center space-x-2">
-              <Wallet className="h-4 w-4" />
-              <span>Connect Wallet</span>
-            </Button>
+            <div className="flex flex-col items-end space-y-2">
+              <Button onClick={connect} className="flex items-center space-x-2">
+                <Wallet className="h-4 w-4" />
+                <span>Connect Wallet</span>
+              </Button>
+              {error && (
+                <div className="text-xs text-red-500 max-w-xs text-right">
+                  {error.message || 'Connection failed'}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex items-center space-x-2">
               <Badge variant="secondary" className="flex items-center space-x-1">

@@ -62,6 +62,7 @@ function useMetaMaskInternal(): UseMetaMaskState {
   >(undefined);
   const [chainId, _setChainId] = useState<number | undefined>(undefined);
   const [accounts, _setAccounts] = useState<string[] | undefined>(undefined);
+  const [error, _setError] = useState<Error | undefined>(undefined);
 
   const connectListenerRef = useRef<ConnectListenerFn | undefined>(undefined);
   const disconnectListenerRef = useRef<DisconnectListenerFn | undefined>(
@@ -85,48 +86,74 @@ function useMetaMaskInternal(): UseMetaMaskState {
   const isConnected = hasProvider && hasAccounts && hasChain;
 
   const connect = useCallback(() => {
+    _setError(undefined); // Clear previous errors
+    
     if (!_currentProvider) {
-      console.error('No MetaMask provider available');
+      const errorMsg = 'No MetaMask provider available. Please install MetaMask or check if it\'s enabled.';
+      console.error('[MetaMask]', errorMsg);
+      console.error('[MetaMask] Available providers:', providers.map(p => p.info.name));
+      console.error('[MetaMask] window.ethereum:', typeof window !== 'undefined' && !!(window as any).ethereum);
+      
+      _setError(new Error(errorMsg));
+      
+      // Try to reinitialize provider
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        console.log('[MetaMask] Attempting to use window.ethereum as fallback');
+        _setCurrentProvider((window as any).ethereum);
+        return;
+      }
+      
       return;
     }
 
     if (accounts && accounts.length > 0) {
-      console.log('Already connected');
+      console.log('[MetaMask] Already connected');
       return;
     }
 
     try {
-      // Prompt connection
+      console.log('[MetaMask] Requesting connection...');
       _currentProvider.request({ method: "eth_requestAccounts" });
     } catch (error) {
-      console.error('Error connecting to MetaMask:', error);
+      console.error('[MetaMask] Error connecting to MetaMask:', error);
+      _setError(error instanceof Error ? error : new Error('Connection failed'));
     }
-  }, [_currentProvider, accounts]);
+  }, [_currentProvider, accounts, providers]);
 
 
   useEffect(() => {
     let next: Eip1193ProviderWithEvent | undefined = undefined;
     
+    console.log('[MetaMask] Available providers:', providers.map(p => p.info.name));
+    console.log('[MetaMask] EIP-6963 error:', eip6963Error);
+    
     try {
       for (let i = 0; i < providers.length; ++i) {
+        console.log('[MetaMask] Checking provider:', providers[i].info.name);
         if (providers[i].info.name.toLowerCase() === "metamask") {
           next = providers[i].provider;
+          console.log('[MetaMask] Found MetaMask provider via EIP-6963');
           break;
         }
       }
       
       // Fallback: try to get ethereum from window if EIP-6963 fails
       if (!next && typeof window !== 'undefined' && (window as any).ethereum) {
-        console.log('Using fallback ethereum provider from window');
+        console.log('[MetaMask] Using fallback ethereum provider from window');
         next = (window as any).ethereum;
       }
     } catch (error) {
-      console.error('Error initializing MetaMask provider:', error);
+      console.error('[MetaMask] Error initializing MetaMask provider:', error);
       // Try fallback
       if (typeof window !== 'undefined' && (window as any).ethereum) {
-        console.log('Using fallback ethereum provider after error');
+        console.log('[MetaMask] Using fallback ethereum provider after error');
         next = (window as any).ethereum;
       }
+    }
+
+    if (!next) {
+      console.warn('[MetaMask] No MetaMask provider found. Available providers:', providers.map(p => p.info.name));
+      console.warn('[MetaMask] window.ethereum available:', typeof window !== 'undefined' && !!(window as any).ethereum);
     }
 
     const prev = metaMaskProviderRef.current;
@@ -316,7 +343,7 @@ function useMetaMaskInternal(): UseMetaMaskState {
     chainId,
     accounts,
     isConnected,
-    error: eip6963Error,
+    error: error || eip6963Error,
     connect,
   };
 }

@@ -140,6 +140,7 @@ export const useConfidentialToken = (parameters: {
   sameSigner: RefObject<
     (ethersSigner: ethers.JsonRpcSigner | undefined) => boolean
   >;
+  overrideTokenAddress?: string; // Token address from resolver
 }) => {
   const {
     instance,
@@ -149,6 +150,7 @@ export const useConfidentialToken = (parameters: {
     ethersReadonlyProvider,
     sameChain,
     sameSigner,
+    overrideTokenAddress,
   } = parameters;
 
   //////////////////////////////////////////////////////////////////////////////
@@ -196,7 +198,19 @@ export const useConfidentialToken = (parameters: {
   //////////////////////////////////////////////////////////////////////////////
 
   const confidentialToken = useMemo(() => {
-    // If we have a looked up token address from registry, use it
+    // Priority 1: Override address from token resolver
+    if (overrideTokenAddress) {
+      const c = {
+        address: overrideTokenAddress as `0x${string}`,
+        chainId: chainId!,
+        chainName: getNetworkName(chainId!),
+        abi: ConfidentialTokenExtendedABI.abi,
+      };
+      confidentialTokenRef.current = c;
+      return c;
+    }
+
+    // Priority 2: Looked up token address from registry
     if (lookedUpTokenAddress) {
       const c = {
         address: lookedUpTokenAddress as `0x${string}`,
@@ -208,7 +222,7 @@ export const useConfidentialToken = (parameters: {
       return c;
     }
 
-    // Otherwise, use the default lookup
+    // Priority 3: Default lookup from generated addresses
     const c = getConfidentialTokenByChainId(chainId);
     confidentialTokenRef.current = c;
 
@@ -217,7 +231,7 @@ export const useConfidentialToken = (parameters: {
     }
 
     return c;
-  }, [chainId, lookedUpTokenAddress]);
+  }, [chainId, lookedUpTokenAddress, overrideTokenAddress]);
 
   // List all slugs for a user
   const listUserSlugs = useCallback(async (ownerAddress: string) => {
@@ -389,10 +403,29 @@ export const useConfidentialToken = (parameters: {
 
   const isDeployed = useMemo(() => {
     if (!confidentialToken) {
+      console.log("[useConfidentialToken] isDeployed: no confidentialToken");
       return undefined;
     }
-    return Boolean(confidentialToken.address) && confidentialToken.address !== ethers.ZeroAddress;
-  }, [confidentialToken]);
+    
+    console.log("[useConfidentialToken] isDeployed check:", {
+      address: confidentialToken.address,
+      overrideTokenAddress,
+      hasAddress: Boolean(confidentialToken.address),
+      notZeroAddress: confidentialToken.address !== ethers.ZeroAddress,
+      isOverrideMatch: overrideTokenAddress && confidentialToken.address === overrideTokenAddress
+    });
+    
+    // If we have an override token address from resolver, assume it's deployed
+    // since the resolver already verified it
+    if (overrideTokenAddress && confidentialToken.address === overrideTokenAddress) {
+      console.log("[useConfidentialToken] isDeployed: true (override match)");
+      return true;
+    }
+    // For other cases, check if address exists and is not zero
+    const deployed = Boolean(confidentialToken.address) && confidentialToken.address !== ethers.ZeroAddress;
+    console.log("[useConfidentialToken] isDeployed:", deployed);
+    return deployed;
+  }, [confidentialToken, overrideTokenAddress]);
 
   const canGetBalance = useMemo(() => {
     return confidentialToken.address && ethersReadonlyProvider && !isRefreshing;

@@ -21,7 +21,11 @@ import {
   Clock
 } from "lucide-react";
 
-export function BalanceCard() {
+interface BalanceCardProps {
+  overrideTokenAddress?: string;
+}
+
+export function BalanceCard({ overrideTokenAddress }: BalanceCardProps = {}) {
   const { provider, chainId } = useMetaMask();
   const { ethersSigner } = useMetaMaskEthersSigner();
   const { instance } = useFhevm({ provider, chainId });
@@ -53,6 +57,7 @@ export function BalanceCard() {
     ethersReadonlyProvider: ethersSigner,
     sameChain,
     sameSigner,
+    overrideTokenAddress,
   });
 
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
