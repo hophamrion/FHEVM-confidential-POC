@@ -1,0 +1,4 @@
+packages/fhevm-hardhat-template
+node_modules
+.git
+*.log
