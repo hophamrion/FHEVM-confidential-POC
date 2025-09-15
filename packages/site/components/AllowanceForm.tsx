@@ -45,6 +45,11 @@ export function AllowanceForm() {
   const {
     contractAddress,
     isDeployed,
+    approveConfidential,
+    transferFromConfidential,
+    isMinting: isProcessingFromHook,
+    message: hookMessage,
+    setMessage: setHookMessage,
   } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
@@ -56,98 +61,17 @@ export function AllowanceForm() {
     sameSigner,
   });
 
-  const handleApprove = async () => {
-    if (!instance || !ethersSigner || !contractAddress || !approveSpender || !approveAmount) {
-      return;
-    }
-
+  const handleApprove = () => {
     const amountNum = parseFloat(approveAmount);
-    if (amountNum <= 0 || !isAddress(approveSpender)) {
-      setMessage("Invalid spender address or amount");
-      return;
-    }
-
-    setIsApproving(true);
-    setMessage("Approving confidential allowance...");
-
-    try {
-      const from = await ethersSigner.getAddress();
-      const input = instance.createEncryptedInput(contractAddress, from);
-      const scaledAmount = parseUnits(approveAmount, 6);
-      input.add64(scaledAmount);
-
-      const enc = await input.encrypt();
-
-      const tokenContract = new (await import("ethers")).Contract(
-        contractAddress,
-        [
-          "function transferConfidential(address to, externalEuint64 encAmount, bytes calldata proof) external"
-        ],
-        ethersSigner
-      );
-
-      const tx = await tokenContract.approveConfidential(
-        approveSpender,
-        enc.handles[0],
-        enc.inputProof
-      );
-
-      setMessage(`Approval submitted: ${tx.hash}`);
-      const receipt = await tx.wait();
-      setMessage(`Allowance approved! Status: ${receipt?.status}`);
-      
-    } catch (error) {
-      setMessage(`Approval failed: ${error}`);
-    } finally {
-      setIsApproving(false);
+    if (amountNum > 0 && approveSpender) {
+      approveConfidential(approveSpender, amountNum);
     }
   };
 
-  const handleTransferFrom = async () => {
-    if (!instance || !ethersSigner || !contractAddress || !transferFromFrom || !transferFromTo || !transferFromAmount) {
-      return;
-    }
-
+  const handleTransferFrom = () => {
     const amountNum = parseFloat(transferFromAmount);
-    if (amountNum <= 0 || !isAddress(transferFromFrom) || !isAddress(transferFromTo)) {
-      setMessage("Invalid addresses or amount");
-      return;
-    }
-
-    setIsTransferring(true);
-    setMessage("Transferring from allowance...");
-
-    try {
-      const from = await ethersSigner.getAddress();
-      const input = instance.createEncryptedInput(contractAddress, from);
-      const scaledAmount = parseUnits(transferFromAmount, 6);
-      input.add64(scaledAmount);
-
-      const enc = await input.encrypt();
-
-      const tokenContract = new (await import("ethers")).Contract(
-        contractAddress,
-        [
-          "function transferFromConfidential(address from, address to, externalEuint64 encAmount, bytes calldata proof) external"
-        ],
-        ethersSigner
-      );
-
-      const tx = await tokenContract.transferFromConfidential(
-        transferFromFrom,
-        transferFromTo,
-        enc.handles[0],
-        enc.inputProof
-      );
-
-      setMessage(`Transfer submitted: ${tx.hash}`);
-      const receipt = await tx.wait();
-      setMessage(`Transfer completed! Status: ${receipt?.status}`);
-      
-    } catch (error) {
-      setMessage(`Transfer failed: ${error}`);
-    } finally {
-      setIsTransferring(false);
+    if (amountNum > 0 && transferFromFrom && transferFromTo) {
+      transferFromConfidential(transferFromFrom, transferFromTo, amountNum);
     }
   };
 
@@ -167,31 +91,137 @@ export function AllowanceForm() {
     );
   }
 
-  // Show coming soon for current contract (doesn't have allowance functions)
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Shield className="h-5 w-5" />
           <span>Allowance Management</span>
-          <Badge variant="secondary" className="ml-auto">
-            <Clock className="h-3 w-3 mr-1" />
-            Coming Soon
-          </Badge>
         </CardTitle>
         <CardDescription>
-          Allowance functionality will be available in the extended contract version.
+          Approve and manage spending allowances for confidential tokens.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-8 text-muted-foreground">
-          <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg font-medium mb-2">Feature Coming Soon</p>
-          <p className="text-sm">
-            The current contract doesn't include allowance functions. 
-            Deploy the extended version to use allowance features.
-          </p>
-        </div>
+        <Tabs defaultValue="approve" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="approve">Approve</TabsTrigger>
+            <TabsTrigger value="transfer">Transfer From</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="approve" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="spender">Spender Address</Label>
+              <Input
+                id="spender"
+                type="text"
+                placeholder="0x..."
+                value={approveSpender}
+                onChange={(e) => setApproveSpender(e.target.value)}
+                disabled={isProcessingFromHook}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="approve-amount">Amount to Approve</Label>
+              <Input
+                id="approve-amount"
+                type="text"
+                placeholder="0.000000"
+                value={approveAmount}
+                onChange={(e) => setApproveAmount(e.target.value)}
+                disabled={isProcessingFromHook}
+              />
+            </div>
+            
+            <Button
+              onClick={handleApprove}
+              disabled={!approveSpender || !approveAmount || parseFloat(approveAmount) <= 0 || isProcessingFromHook}
+              className="w-full"
+              size="lg"
+            >
+              {isProcessingFromHook ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Approve Spending
+                </>
+              )}
+            </Button>
+          </TabsContent>
+          
+          <TabsContent value="transfer" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="from">From Address</Label>
+              <Input
+                id="from"
+                type="text"
+                placeholder="0x..."
+                value={transferFromFrom}
+                onChange={(e) => setTransferFromFrom(e.target.value)}
+                disabled={isProcessingFromHook}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="to">To Address</Label>
+              <Input
+                id="to"
+                type="text"
+                placeholder="0x..."
+                value={transferFromTo}
+                onChange={(e) => setTransferFromTo(e.target.value)}
+                disabled={isProcessingFromHook}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="transfer-amount">Amount to Transfer</Label>
+              <Input
+                id="transfer-amount"
+                type="text"
+                placeholder="0.000000"
+                value={transferFromAmount}
+                onChange={(e) => setTransferFromAmount(e.target.value)}
+                disabled={isProcessingFromHook}
+              />
+            </div>
+            
+            <Button
+              onClick={handleTransferFrom}
+              disabled={!transferFromFrom || !transferFromTo || !transferFromAmount || parseFloat(transferFromAmount) <= 0 || isProcessingFromHook}
+              className="w-full"
+              size="lg"
+            >
+              {isProcessingFromHook ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Transferring...
+                </>
+              ) : (
+                <>
+                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  Transfer From
+                </>
+              )}
+            </Button>
+          </TabsContent>
+        </Tabs>
+
+        {hookMessage && (
+          <Alert variant={hookMessage.includes("failed") ? "destructive" : "default"} className="mt-4">
+            {hookMessage.includes("failed") ? (
+              <AlertCircle className="h-4 w-4" />
+            ) : (
+              <CheckCircle className="h-4 w-4" />
+            )}
+            <AlertDescription>{hookMessage}</AlertDescription>
+          </Alert>
+        )}
       </CardContent>
     </Card>
   );

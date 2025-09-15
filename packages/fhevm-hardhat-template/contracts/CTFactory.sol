@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./ConfidentialTokenFixed.sol"; // token hiện tại của bạn
+import "./ConfidentialTokenExtended.sol"; // token hiện tại của bạn
 import "./CTRegistry.sol";
 
 contract CTFactory {
@@ -19,7 +19,7 @@ contract CTFactory {
         returns (address token)
     {
         // 1) deploy token (owner tạm là Factory)
-        ConfidentialTokenFixed t = new ConfidentialTokenFixed();
+        ConfidentialTokenExtended t = new ConfidentialTokenExtended();
         
         // 2) chuyển quyền về cho user
         t.transferOwnership(msg.sender);

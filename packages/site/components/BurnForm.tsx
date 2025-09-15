@@ -19,7 +19,8 @@ import {
   CheckCircle,
   Info,
   Flame,
-  Clock
+  Clock,
+  AlertCircle
 } from "lucide-react";
 
 export function BurnForm() {
@@ -38,6 +39,10 @@ export function BurnForm() {
   const {
     contractAddress,
     isDeployed,
+    burnConfidential,
+    isMinting: isBurningFromHook,
+    message: hookMessage,
+    setMessage: setHookMessage,
   } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
@@ -57,49 +62,10 @@ export function BurnForm() {
     }
   };
 
-  const handleBurn = async () => {
-    if (!instance || !ethersSigner || !contractAddress || !burnAmount) {
-      return;
-    }
-
+  const handleBurn = () => {
     const amountNum = parseFloat(burnAmount);
-    if (amountNum <= 0) {
-      setMessage("Amount must be greater than 0");
-      return;
-    }
-
-    setIsBurning(true);
-    setMessage("Burning confidential tokens...");
-
-    try {
-      const from = await ethersSigner.getAddress();
-      const input = instance.createEncryptedInput(contractAddress, from);
-      const scaledAmount = parseUnits(burnAmount, 6);
-      input.add64(scaledAmount);
-
-      const enc = await input.encrypt();
-
-      const tokenContract = new (await import("ethers")).Contract(
-        contractAddress,
-        [
-          "function burnConfidential(externalEuint64 encAmount, bytes calldata proof) external"
-        ],
-        ethersSigner
-      );
-
-      const tx = await tokenContract.burnConfidential(
-        enc.handles[0],
-        enc.inputProof
-      );
-
-      setMessage(`Burn submitted: ${tx.hash}`);
-      const receipt = await tx.wait();
-      setMessage(`Tokens burned successfully! Status: ${receipt?.status}`);
-      
-    } catch (error) {
-      setMessage(`Burn failed: ${error}`);
-    } finally {
-      setIsBurning(false);
+    if (amountNum > 0) {
+      burnConfidential(amountNum);
     }
   };
 
@@ -119,31 +85,62 @@ export function BurnForm() {
     );
   }
 
-  // Show coming soon for current contract (doesn't have burn function)
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Minus className="h-5 w-5" />
           <span>Burn Confidential Tokens</span>
-          <Badge variant="secondary" className="ml-auto">
-            <Clock className="h-3 w-3 mr-1" />
-            Coming Soon
-          </Badge>
         </CardTitle>
         <CardDescription>
-          Burn functionality will be available in the extended contract version.
+          Permanently destroy confidential tokens to reduce supply.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="text-center py-8 text-muted-foreground">
-          <Minus className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg font-medium mb-2">Feature Coming Soon</p>
-          <p className="text-sm">
-            The current contract doesn't include burn functions. 
-            Deploy the extended version to use burn features.
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="burn-amount">Amount to Burn</Label>
+          <Input
+            id="burn-amount"
+            type="text"
+            placeholder="0.000000"
+            value={burnAmount}
+            onChange={(e) => handleAmountChange(e.target.value)}
+            disabled={isBurning}
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter the amount of tokens to burn (up to 6 decimal places)
           </p>
         </div>
+
+        <Button
+          onClick={handleBurn}
+          disabled={!burnAmount || parseFloat(burnAmount) <= 0 || isBurningFromHook}
+          className="w-full"
+          size="lg"
+        >
+          {isBurningFromHook ? (
+            <>
+              <Clock className="h-4 w-4 mr-2 animate-spin" />
+              Burning...
+            </>
+          ) : (
+            <>
+              <Flame className="h-4 w-4 mr-2" />
+              Burn Tokens
+            </>
+          )}
+        </Button>
+
+        {hookMessage && (
+          <Alert variant={hookMessage.includes("failed") ? "destructive" : "default"}>
+            {hookMessage.includes("failed") ? (
+              <AlertCircle className="h-4 w-4" />
+            ) : (
+              <CheckCircle className="h-4 w-4" />
+            )}
+            <AlertDescription>{hookMessage}</AlertDescription>
+          </Alert>
+        )}
       </CardContent>
     </Card>
   );

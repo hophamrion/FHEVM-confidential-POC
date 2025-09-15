@@ -439,13 +439,13 @@ export const useConfidentialToken = (parameters: {
       abiLength: confidentialTokenRef.current.abi.length,
       hasGetEncryptedBalance: !!thisTokenContract.getEncryptedBalance,
       abiFunctions: abiFunctions,
-      contractMethods: thisTokenContract.interface?.functions ? Object.getOwnPropertyNames(thisTokenContract.interface.functions) : "No interface.functions"
+      contractMethods: thisTokenContract.interface ? Object.getOwnPropertyNames(thisTokenContract.interface) : "No interface"
     });
 
     // Check if contract has getEncryptedBalance function
     if (!thisTokenContract.getEncryptedBalance) {
       console.error("[useConfidentialToken] Contract does not have getEncryptedBalance function");
-      console.error("[DEBUG] Available functions:", thisTokenContract.interface?.functions ? Object.getOwnPropertyNames(thisTokenContract.interface.functions) : "No interface.functions");
+      console.error("[DEBUG] Available functions:", thisTokenContract.interface ? Object.getOwnPropertyNames(thisTokenContract.interface) : "No interface");
       setMessage("Contract ABI mismatch - missing getEncryptedBalance function");
       setIsRefreshing(false);
       isRefreshingRef.current = false;
@@ -804,19 +804,19 @@ export const useConfidentialToken = (parameters: {
         setMessage(`Call mintConfidential...`);
 
         // Debug: Log contract details for mint
-        const abiFunctions = confidentialTokenRef.current.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name);
+        const abiFunctions = confidentialTokenRef.current?.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name) || [];
         console.log("[DEBUG] Mint contract details:", {
           address: thisTokenAddress,
           chainId: thisChainId,
-          abiLength: confidentialTokenRef.current.abi.length,
+          abiLength: confidentialTokenRef.current?.abi.length || 0,
           hasMintConfidential: !!tokenContract.mintConfidential,
           abiFunctions: abiFunctions,
-          contractMethods: tokenContract.interface?.functions ? Object.getOwnPropertyNames(tokenContract.interface.functions) : "No interface.functions"
+          contractMethods: tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface"
         });
 
         // Check if contract has mintConfidential function
         if (!tokenContract.mintConfidential) {
-          console.error("[DEBUG] Available functions:", tokenContract.interface?.functions ? Object.getOwnPropertyNames(tokenContract.interface.functions) : "No interface.functions");
+          console.error("[DEBUG] Available functions:", tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface");
           throw new Error("Contract does not have mintConfidential function");
         }
 
@@ -1042,6 +1042,294 @@ export const useConfidentialToken = (parameters: {
     setMessage("Decryption session reset. Please try again.");
   }, [fhevmDecryptionSignatureStorage]);
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Burn Confidential Tokens
+  //////////////////////////////////////////////////////////////////////////////
+
+  const burnConfidential = useCallback((amount: number) => {
+    if (isRefreshingRef.current || isMintingRef.current) {
+      return;
+    }
+
+    if (!confidentialToken.address || !ethersSigner || amount <= 0) {
+      setMessage("Missing required parameters for burning");
+      return;
+    }
+
+    if (!instance) {
+      setMessage("FHEVM instance not ready");
+      return;
+    }
+
+    const thisChainId = chainId;
+    const thisTokenAddress = confidentialToken.address;
+    const thisEthersSigner = ethersSigner;
+
+    isMintingRef.current = true;
+    setIsMinting(true);
+    setMessage(`Burn ${amount} tokens...`);
+
+    const run = async () => {
+      try {
+        const tokenContract = new ethers.Contract(
+          thisTokenAddress,
+          confidentialToken.abi,
+          thisEthersSigner
+        );
+
+        // Debug: Log contract details for burn
+        const abiFunctions = confidentialTokenRef.current?.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name) || [];
+        console.log("[DEBUG] Burn contract details:", {
+          address: thisTokenAddress,
+          chainId: thisChainId,
+          abiLength: confidentialTokenRef.current?.abi.length || 0,
+          hasBurnConfidential: !!tokenContract.burnConfidential,
+          abiFunctions: abiFunctions,
+          contractMethods: tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface"
+        });
+
+        // Check ABI selector
+        const burnFunction = tokenContract.interface?.getFunction("burnConfidential");
+        console.log("[DEBUG] burnConfidential selector:", burnFunction?.selector);
+        console.log("[DEBUG] Expected selector: 0xee98b3b6");
+
+        // Check if contract has burnConfidential function
+        if (!tokenContract.burnConfidential) {
+          console.error("[DEBUG] Available functions:", tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface");
+          throw new Error("Contract does not have burnConfidential function");
+        }
+
+        // Check if contract has code
+        const provider = thisEthersSigner.provider;
+        const code = await provider.getCode(thisTokenAddress);
+        console.log("[DEBUG] Contract code:", code !== "0x" ? "HAS CODE" : "NO CODE");
+        console.log("[DEBUG] Contract address:", thisTokenAddress);
+        console.log("[DEBUG] Registry lookup result:", lookedUpTokenAddress);
+        console.log("[DEBUG] Current slug:", currentSlug);
+        
+        // Check if address is initialized
+        const isInitialized = await tokenContract.isInitialized(thisEthersSigner.address);
+        console.log("[DEBUG] Address initialized:", isInitialized);
+        
+        if (!isInitialized) {
+          setMessage("Address not initialized. Please initialize first.");
+          return;
+        }
+
+        // Create encrypted input
+        const enc = instance.createEncryptedInput(thisTokenAddress, thisEthersSigner.address);
+        enc.add64(BigInt(parseUnits(amount.toString(), 6)));
+        const { handles, inputProof } = await enc.encrypt();
+
+        setMessage(`Call burnConfidential...`);
+
+        // Debug: Log encrypted data
+        console.log("[DEBUG] Burn encrypted data:", {
+          handle: handles[0],
+          inputProof: inputProof,
+          handleLength: handles[0]?.length,
+          proofLength: inputProof?.length
+        });
+
+        // Test with staticCall first
+        try {
+          await tokenContract.burnConfidential.staticCall(
+            handles[0],
+            inputProof
+          );
+          console.log("[DEBUG] staticCall successful");
+        } catch (e) {
+          console.error("[DEBUG] staticCall failed:", e);
+          throw e;
+        }
+
+        const tx = await tokenContract.burnConfidential(
+          handles[0],
+          inputProof
+        );
+
+        setMessage(`Wait for tx:${tx.hash}...`);
+
+        const receipt = await tx.wait();
+        setMessage(`Burn completed! status=${receipt?.status}`);
+
+      } catch (error: any) {
+        console.error("[useConfidentialToken] Burn error:", error);
+        setMessage(`Burn failed: ${error.message}`);
+      } finally {
+        setIsMinting(false);
+        isMintingRef.current = false;
+      }
+    };
+
+    run();
+  }, [confidentialToken.address, confidentialToken.abi, ethersSigner, instance, chainId]);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Approve Confidential Tokens
+  //////////////////////////////////////////////////////////////////////////////
+
+  const approveConfidential = useCallback((spender: string, amount: number) => {
+    if (isRefreshingRef.current || isMintingRef.current) {
+      return;
+    }
+
+    if (!confidentialToken.address || !ethersSigner || amount <= 0 || !spender) {
+      setMessage("Missing required parameters for approval");
+      return;
+    }
+
+    if (!instance) {
+      setMessage("FHEVM instance not ready");
+      return;
+    }
+
+    const thisChainId = chainId;
+    const thisTokenAddress = confidentialToken.address;
+    const thisEthersSigner = ethersSigner;
+
+    isMintingRef.current = true;
+    setIsMinting(true);
+    setMessage(`Approve ${amount} tokens for ${spender}...`);
+
+    const run = async () => {
+      try {
+        const tokenContract = new ethers.Contract(
+          thisTokenAddress,
+          confidentialToken.abi,
+          thisEthersSigner
+        );
+
+        // Debug: Log contract details for approve
+        const abiFunctions = confidentialTokenRef.current?.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name) || [];
+        console.log("[DEBUG] Approve contract details:", {
+          address: thisTokenAddress,
+          chainId: thisChainId,
+          abiLength: confidentialTokenRef.current?.abi.length || 0,
+          hasApproveConfidential: !!tokenContract.approveConfidential,
+          abiFunctions: abiFunctions,
+          contractMethods: tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface"
+        });
+
+        // Check if contract has approveConfidential function
+        if (!tokenContract.approveConfidential) {
+          console.error("[DEBUG] Available functions:", tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface");
+          throw new Error("Contract does not have approveConfidential function");
+        }
+
+        // Create encrypted input
+        const enc = instance.createEncryptedInput(thisTokenAddress, thisEthersSigner.address);
+        enc.add64(BigInt(parseUnits(amount.toString(), 6)));
+        const { handles, inputProof } = await enc.encrypt();
+
+        setMessage(`Call approveConfidential...`);
+
+        const tx = await tokenContract.approveConfidential(
+          spender,
+          handles[0],
+          inputProof
+        );
+
+        setMessage(`Wait for tx:${tx.hash}...`);
+
+        const receipt = await tx.wait();
+        setMessage(`Approval completed! status=${receipt?.status}`);
+
+      } catch (error: any) {
+        console.error("[useConfidentialToken] Approve error:", error);
+        setMessage(`Approval failed: ${error.message}`);
+      } finally {
+        setIsMinting(false);
+        isMintingRef.current = false;
+      }
+    };
+
+    run();
+  }, [confidentialToken.address, confidentialToken.abi, ethersSigner, instance, chainId]);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Transfer From Confidential Tokens
+  //////////////////////////////////////////////////////////////////////////////
+
+  const transferFromConfidential = useCallback((from: string, to: string, amount: number) => {
+    if (isRefreshingRef.current || isMintingRef.current) {
+      return;
+    }
+
+    if (!confidentialToken.address || !ethersSigner || amount <= 0 || !from || !to) {
+      setMessage("Missing required parameters for transferFrom");
+      return;
+    }
+
+    if (!instance) {
+      setMessage("FHEVM instance not ready");
+      return;
+    }
+
+    const thisChainId = chainId;
+    const thisTokenAddress = confidentialToken.address;
+    const thisEthersSigner = ethersSigner;
+
+    isMintingRef.current = true;
+    setIsMinting(true);
+    setMessage(`Transfer ${amount} tokens from ${from} to ${to}...`);
+
+    const run = async () => {
+      try {
+        const tokenContract = new ethers.Contract(
+          thisTokenAddress,
+          confidentialToken.abi,
+          thisEthersSigner
+        );
+
+        // Debug: Log contract details for transferFrom
+        const abiFunctions = confidentialTokenRef.current?.abi.filter((item: any) => item.type === 'function').map((item: any) => item.name) || [];
+        console.log("[DEBUG] TransferFrom contract details:", {
+          address: thisTokenAddress,
+          chainId: thisChainId,
+          abiLength: confidentialTokenRef.current?.abi.length || 0,
+          hasTransferFromConfidential: !!tokenContract.transferFromConfidential,
+          abiFunctions: abiFunctions,
+          contractMethods: tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface"
+        });
+
+        // Check if contract has transferFromConfidential function
+        if (!tokenContract.transferFromConfidential) {
+          console.error("[DEBUG] Available functions:", tokenContract.interface ? Object.getOwnPropertyNames(tokenContract.interface) : "No interface");
+          throw new Error("Contract does not have transferFromConfidential function");
+        }
+
+        // Create encrypted input
+        const enc = instance.createEncryptedInput(thisTokenAddress, thisEthersSigner.address);
+        enc.add64(BigInt(parseUnits(amount.toString(), 6)));
+        const { handles, inputProof } = await enc.encrypt();
+
+        setMessage(`Call transferFromConfidential...`);
+
+        const tx = await tokenContract.transferFromConfidential(
+          from,
+          to,
+          handles[0],
+          inputProof
+        );
+
+        setMessage(`Wait for tx:${tx.hash}...`);
+
+        const receipt = await tx.wait();
+        setMessage(`Transfer completed! status=${receipt?.status}`);
+
+      } catch (error: any) {
+        console.error("[useConfidentialToken] TransferFrom error:", error);
+        setMessage(`Transfer failed: ${error.message}`);
+      } finally {
+        setIsMinting(false);
+        isMintingRef.current = false;
+      }
+    };
+
+    run();
+  }, [confidentialToken.address, confidentialToken.abi, ethersSigner, instance, chainId]);
+
   return {
     contractAddress: confidentialToken.address,
     canDecrypt,
@@ -1072,5 +1360,8 @@ export const useConfidentialToken = (parameters: {
     setCurrentSlug,
     availableSlugs,
     setAvailableSlugs,
+    burnConfidential,
+    approveConfidential,
+    transferFromConfidential,
   };
 };

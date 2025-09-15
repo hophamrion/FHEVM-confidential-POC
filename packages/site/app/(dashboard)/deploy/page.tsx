@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 // Import artifacts
-import artifact from "@/abi/ConfidentialTokenFixed.json";
+import artifact from "@/abi/ConfidentialTokenExtended.json";
 import { CTRegistryABI } from "@/abi/CTRegistryABI";
 import { CTFactoryABI } from "@/abi/CTFactoryABI";
 import { CTRegistryAddresses } from "@/abi/CTRegistryAddresses";
