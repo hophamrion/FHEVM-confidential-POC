@@ -1,0 +1,11 @@
+{
+  "buildCommand": "cd packages/site && npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "packages/site/.next",
+  "installCommand": "npm install --legacy-peer-deps",
+  "framework": "nextjs",
+  "functions": {
+    "packages/site/app/api/**/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}

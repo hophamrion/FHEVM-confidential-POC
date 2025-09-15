@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "preinstall": "node ./scripts/preinstall.mjs",
-    "postinstall": "echo 'Skipping genabi for now - run manually after deployment'"
+    "postinstall": "echo 'Skipping genabi for now - run manually after deployment'",
+    "install:vercel": "npm install --legacy-peer-deps"
   },
   "dependencies": {
     "@openzeppelin/confidential-contracts": "^0.2.0"
