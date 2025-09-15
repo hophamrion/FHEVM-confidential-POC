@@ -9,7 +9,7 @@ import { useMetaMaskEthersSigner } from "@/hooks/metamask/useMetaMaskEthersSigne
 import { useConfidentialToken } from "@/hooks/useConfidentialToken";
 import { useFhevm } from "@/fhevm/useFhevm";
 import { useInMemoryStorage } from "@/hooks/useInMemoryStorage";
-import { Copy, ExternalLink, Wallet } from "lucide-react";
+import { Copy, ExternalLink, Wallet, LogOut } from "lucide-react";
 
 export function Header() {
   const { provider, chainId, connect, isConnected } = useMetaMask();
@@ -42,6 +42,12 @@ export function Header() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+  };
+
+  const disconnect = () => {
+    // Simple disconnect by reloading the page
+    // This will reset all wallet connections
+    window.location.reload();
   };
 
   return (
@@ -126,6 +132,15 @@ export function Header() {
               <div className="text-sm text-muted-foreground">
                 {ethersSigner?.address?.slice(0, 6)}...{ethersSigner?.address?.slice(-4)}
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={disconnect}
+                className="h-8 w-8 p-0"
+                title="Disconnect Wallet"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           )}
         </div>

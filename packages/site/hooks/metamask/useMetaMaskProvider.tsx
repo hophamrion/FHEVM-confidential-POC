@@ -98,6 +98,7 @@ function useMetaMaskInternal(): UseMetaMaskState {
     _currentProvider.request({ method: "eth_requestAccounts" });
   }, [_currentProvider, accounts]);
 
+
   useEffect(() => {
     let next: Eip1193ProviderWithEvent | undefined = undefined;
     for (let i = 0; i < providers.length; ++i) {

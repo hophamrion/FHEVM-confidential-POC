@@ -20,7 +20,8 @@ import {
   Code,
   Lock,
   Clock,
-  Rocket
+  Rocket,
+  BookOpen
 } from "lucide-react";
 
 const navigation = [
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Burn", href: "/burn", icon: Minus, description: "Destroy tokens" },
   { name: "Allowance", href: "/allowance", icon: Shield, description: "Approve spending" },
   { name: "Deploy", href: "/deploy", icon: Rocket, description: "Deploy contract" },
+  { name: "Guide", href: "/guide", icon: BookOpen, description: "Guide & Roadmap" },
   { name: "Observers", href: "/observers", icon: Eye, description: "Grant view access", comingSoon: true },
   { name: "Advanced", href: "/advanced", icon: Settings, description: "Strict mode & Supply", comingSoon: true },
   { name: "Developer", href: "/developer", icon: Code, description: "Debug & Logs" },
