@@ -86,25 +86,46 @@ function useMetaMaskInternal(): UseMetaMaskState {
 
   const connect = useCallback(() => {
     if (!_currentProvider) {
+      console.error('No MetaMask provider available');
       return;
     }
 
     if (accounts && accounts.length > 0) {
-      // already connected
+      console.log('Already connected');
       return;
     }
 
-    // Prompt connection
-    _currentProvider.request({ method: "eth_requestAccounts" });
+    try {
+      // Prompt connection
+      _currentProvider.request({ method: "eth_requestAccounts" });
+    } catch (error) {
+      console.error('Error connecting to MetaMask:', error);
+    }
   }, [_currentProvider, accounts]);
 
 
   useEffect(() => {
     let next: Eip1193ProviderWithEvent | undefined = undefined;
-    for (let i = 0; i < providers.length; ++i) {
-      if (providers[i].info.name.toLowerCase() === "metamask") {
-        next = providers[i].provider;
-        break;
+    
+    try {
+      for (let i = 0; i < providers.length; ++i) {
+        if (providers[i].info.name.toLowerCase() === "metamask") {
+          next = providers[i].provider;
+          break;
+        }
+      }
+      
+      // Fallback: try to get ethereum from window if EIP-6963 fails
+      if (!next && typeof window !== 'undefined' && (window as any).ethereum) {
+        console.log('Using fallback ethereum provider from window');
+        next = (window as any).ethereum;
+      }
+    } catch (error) {
+      console.error('Error initializing MetaMask provider:', error);
+      // Try fallback
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        console.log('Using fallback ethereum provider after error');
+        next = (window as any).ethereum;
       }
     }
 
