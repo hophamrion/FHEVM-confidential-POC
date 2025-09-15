@@ -511,9 +511,11 @@ export default function DeployPage() {
                       placeholder="main"
                       value={slug}
                       onChange={(e) => setSlug(e.target.value)}
+                      disabled={true}
+                      className="bg-muted cursor-not-allowed"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Unique identifier for your project (e.g., "main", "payroll", "airdrop-2025")
+                      Fixed to "main" for consistency. Advanced users can modify in Dev Panel.
                     </p>
                   </div>
 
@@ -559,9 +561,11 @@ export default function DeployPage() {
                       placeholder="main"
                       value={slug}
                       onChange={(e) => setSlug(e.target.value)}
+                      disabled={true}
+                      className="bg-muted cursor-not-allowed"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Will be used when registering to registry
+                      Fixed to "main" for consistency. Advanced users can modify in Dev Panel.
                     </p>
                   </div>
 

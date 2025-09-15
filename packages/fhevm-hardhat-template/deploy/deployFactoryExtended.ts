@@ -36,3 +36,4 @@ const deployFactoryExtended: DeployFunction = async function (hre: HardhatRuntim
 export default deployFactoryExtended;
 deployFactoryExtended.tags = ["CTFactory"];
 deployFactoryExtended.dependencies = ["CTRegistry"];
+

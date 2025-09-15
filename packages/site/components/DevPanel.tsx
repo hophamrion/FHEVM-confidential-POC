@@ -28,6 +28,7 @@ import {
 export function DevPanel() {
   const [testAddress, setTestAddress] = useState("");
   const [isValidAddress, setIsValidAddress] = useState(true);
+  const [showAdvancedSlug, setShowAdvancedSlug] = useState(false);
 
   const { provider, chainId } = useMetaMask();
   const { ethersSigner } = useMetaMaskEthersSigner();
@@ -126,57 +127,76 @@ export function DevPanel() {
             <div>
               <Label className="text-xs text-muted-foreground">Registry Slug</Label>
               <div className="flex items-center space-x-2">
-                <select
-                  value={currentSlug}
-                  onChange={(e) => setCurrentSlug(e.target.value)}
-                  className="text-xs h-8 px-2 border rounded bg-background"
+                <Badge variant="outline" className="text-xs">
+                  {currentSlug}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowAdvancedSlug(!showAdvancedSlug);
+                  }}
+                  className="text-xs h-6 px-2"
                 >
-                  {availableSlugs.map((slug) => (
-                    <option key={slug} value={slug}>
-                      {slug}
-                    </option>
-                  ))}
-                  <option value="custom">Custom...</option>
-                </select>
-                {currentSlug === "custom" && (
-                  <Input
-                    value={currentSlug}
-                    onChange={(e) => setCurrentSlug(e.target.value)}
-                    className="text-xs h-8"
-                    placeholder="Enter custom slug"
-                  />
-                )}
+                  <Code className="h-3 w-3" />
+                </Button>
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 Found {availableSlugs.length} slug(s): {availableSlugs.join(", ")}
               </div>
-              <div className="flex items-center space-x-2 mt-2">
-                <Input
-                  placeholder="Add new slug to check"
-                  className="text-xs h-6"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      const newSlug = e.currentTarget.value.trim();
-                      if (newSlug && !availableSlugs.includes(newSlug)) {
-                        // Add to available slugs temporarily
-                        setAvailableSlugs([...availableSlugs, newSlug]);
-                        e.currentTarget.value = '';
-                      }
-                    }
-                  }}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs h-6"
-                  onClick={() => {
-                    // Refresh slugs from registry
-                    window.location.reload();
-                  }}
-                >
-                  Refresh
-                </Button>
-              </div>
+              {/* Advanced Slug Selector - Hidden by default */}
+              {showAdvancedSlug && (
+                <div className="mt-2 p-2 border rounded bg-muted/50">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <select
+                      value={currentSlug}
+                      onChange={(e) => setCurrentSlug(e.target.value)}
+                      className="text-xs h-8 px-2 border rounded bg-background"
+                    >
+                      {availableSlugs.map((slug) => (
+                        <option key={slug} value={slug}>
+                          {slug}
+                        </option>
+                      ))}
+                      <option value="custom">Custom...</option>
+                    </select>
+                    {currentSlug === "custom" && (
+                      <Input
+                        value={currentSlug}
+                        onChange={(e) => setCurrentSlug(e.target.value)}
+                        className="text-xs h-8"
+                        placeholder="Enter custom slug"
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      placeholder="Add new slug to check"
+                      className="text-xs h-6"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          const newSlug = e.currentTarget.value.trim();
+                          if (newSlug && !availableSlugs.includes(newSlug)) {
+                            setAvailableSlugs([...availableSlugs, newSlug]);
+                            e.currentTarget.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        // Refresh slugs from registry
+                        window.location.reload();
+                      }}
+                      className="text-xs h-6 px-2"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Contract Address</Label>

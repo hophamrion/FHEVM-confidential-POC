@@ -194,11 +194,13 @@ export function BatchTransferForm() {
             id="csv-input"
             value={csvInput}
             onChange={(e) => handleCSVChange(e.target.value)}
-            placeholder="0x1234...,100.5&#10;0x5678...,50.25&#10;0x9abc...,75.0"
+            placeholder={`0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6,100.5
+0x8ba1f109551bD432803012645Hac136c,50.25
+0x1234567890123456789012345678901234567890,75.0`}
             className="w-full h-32 px-3 py-2 border border-input bg-background rounded-md text-sm font-mono"
           />
           <p className="text-xs text-muted-foreground">
-            Enter one recipient per line: address,amount (comma-separated)
+            Enter one recipient per line: address,amount (comma-separated). Each line = one transfer.
           </p>
         </div>
 

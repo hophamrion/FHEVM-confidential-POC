@@ -1,39 +1,90 @@
 import { ethers } from "hardhat";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 
 async function main() {
-  console.log("Deploying ConfidentialTokenFixed...");
+  console.log("Deploying CTRegistry...");
 
-  const ConfidentialTokenFixed = await ethers.getContractFactory("ConfidentialTokenFixed");
-  const confidentialToken = await ConfidentialTokenFixed.deploy();
+  // Deploy CTRegistry
+  const CTRegistry = await ethers.getContractFactory("CTRegistry");
+  const registry = await CTRegistry.deploy();
+  await registry.waitForDeployment();
 
-  await confidentialToken.waitForDeployment();
+  const registryAddress = await registry.getAddress();
+  console.log("CTRegistry deployed to:", registryAddress);
 
-  const address = await confidentialToken.getAddress();
-  console.log(`ConfidentialTokenFixed deployed to: ${address}`);
+  // Deploy CTFactory
+  console.log("Deploying CTFactory...");
+  const CTFactory = await ethers.getContractFactory("CTFactory");
+  const factory = await CTFactory.deploy(registryAddress);
+  await factory.waitForDeployment();
 
-  // Save deployment info
-  const fs = require('fs');
-  const path = require('path');
-  
-  const deploymentDir = path.join(__dirname, '../deployments/sepolia');
-  if (!fs.existsSync(deploymentDir)) {
-    fs.mkdirSync(deploymentDir, { recursive: true });
-  }
+  const factoryAddress = await factory.getAddress();
+  console.log("CTFactory deployed to:", factoryAddress);
 
-  const deploymentInfo = {
-    address: address,
-    chainId: 11155111,
-    chainName: "Sepolia",
-    deployedAt: new Date().toISOString(),
-    contractName: "ConfidentialTokenFixed"
+  // Set factory as registrar
+  console.log("Setting factory as registrar...");
+  const setRegistrarTx = await registry.setRegistrar(factoryAddress, true);
+  await setRegistrarTx.wait();
+  console.log("Factory registered as registrar");
+
+  // Verify setup
+  const isRegistered = await registry.isRegistrar(factoryAddress);
+  console.log("Factory is registrar:", isRegistered);
+
+  // Get network info
+  const network = await ethers.provider.getNetwork();
+  const deployer = await (await ethers.provider.getSigner()).getAddress();
+
+  console.log("\n=== Deployment Summary ===");
+  console.log("CTRegistry:", registryAddress);
+  console.log("CTFactory:", factoryAddress);
+  console.log("Network:", network);
+  console.log("Deployer:", deployer);
+
+  // Create deployment artifacts
+  const deploymentsDir = join(__dirname, "../deployments", network.name);
+  mkdirSync(deploymentsDir, { recursive: true });
+
+  // Save Registry deployment
+  const registryArtifact = {
+    address: registryAddress,
+    abi: CTRegistry.interface.format("json"),
+    transactionHash: registry.deploymentTransaction()?.hash,
+    receipt: await registry.deploymentTransaction()?.wait(),
+    args: [],
+    bytecode: CTRegistry.bytecode,
+    deployedBytecode: await ethers.provider.getCode(registryAddress),
+    linkReferences: {},
+    deployedLinkReferences: {}
   };
 
-  fs.writeFileSync(
-    path.join(deploymentDir, 'ConfidentialTokenFixed.json'),
-    JSON.stringify(deploymentInfo, null, 2)
+  writeFileSync(
+    join(deploymentsDir, "CTRegistry.json"),
+    JSON.stringify(registryArtifact, null, 2)
   );
 
-  console.log("✅ Deployment info saved!");
+  // Save Factory deployment
+  const factoryArtifact = {
+    address: factoryAddress,
+    abi: CTFactory.interface.format("json"),
+    transactionHash: factory.deploymentTransaction()?.hash,
+    receipt: await factory.deploymentTransaction()?.wait(),
+    args: [registryAddress],
+    bytecode: CTFactory.bytecode,
+    deployedBytecode: await ethers.provider.getCode(factoryAddress),
+    linkReferences: {},
+    deployedLinkReferences: {}
+  };
+
+  writeFileSync(
+    join(deploymentsDir, "CTFactory.json"),
+    JSON.stringify(factoryArtifact, null, 2)
+  );
+
+  console.log("\n=== Deployment Artifacts Created ===");
+  console.log("Registry artifact:", join(deploymentsDir, "CTRegistry.json"));
+  console.log("Factory artifact:", join(deploymentsDir, "CTFactory.json"));
 }
 
 main()

@@ -169,8 +169,8 @@ export const useConfidentialToken = (parameters: {
   const [lookedUpTokenAddress, setLookedUpTokenAddress] = useState<string | null>(null);
   const [contractOwner, setContractOwner] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState<boolean>(false);
-  const [currentSlug, setCurrentSlug] = useState<string>("tomcat2389");
-  const [debouncedSlug, setDebouncedSlug] = useState<string>("tomcat2389");
+  const [currentSlug, setCurrentSlug] = useState<string>("main");
+  const [debouncedSlug, setDebouncedSlug] = useState<string>("main");
   const [availableSlugs, setAvailableSlugs] = useState<string[]>([]);
 
   const confidentialTokenRef = useRef<ConfidentialTokenInfoType | undefined>(undefined);
