@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build --workspace=packages/site",
+  "buildCommand": "cd packages/site && npm run build",
   "outputDirectory": "packages/site/.next",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
