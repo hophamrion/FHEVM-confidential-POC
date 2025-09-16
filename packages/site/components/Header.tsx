@@ -10,6 +10,7 @@ import { useConfidentialToken } from "@/hooks/useConfidentialToken";
 import { useFhevm } from "@/fhevm/useFhevm";
 import { useInMemoryStorage } from "@/hooks/useInMemoryStorage";
 import { useTokenContext } from "@/contexts/TokenContext";
+import { TokenSwitcher } from "@/components/TokenSwitcher";
 import { Copy, ExternalLink, Wallet, LogOut } from "lucide-react";
 
 export function Header() {
@@ -17,7 +18,7 @@ export function Header() {
   const { ethersSigner } = useMetaMaskEthersSigner();
   const { instance } = useFhevm({ provider, chainId });
   const fhevmDecryptionSignatureStorage = useInMemoryStorage();
-  const { tokenAddress } = useTokenContext();
+  const { tokenAddress, selectToken, addToken } = useTokenContext();
   
   const sameChain = { current: (id: number | undefined) => id === chainId };
   const sameSigner = { current: (signer: any) => signer === ethersSigner };
@@ -69,13 +70,23 @@ export function Header() {
           </div>
         </div>
 
-        {/* Network & Contract Info */}
+        {/* Network & Token Switcher */}
         <div className="flex items-center space-x-4">
           {/* Network Badge */}
           <Badge variant="outline" className="flex items-center space-x-1">
             <div className="h-2 w-2 rounded-full bg-green-500"></div>
             <span>{getNetworkName(chainId)}</span>
           </Badge>
+
+          {/* Token Switcher */}
+          {isConnected && chainId && (
+            <TokenSwitcher
+              chainId={chainId}
+              activeToken={tokenAddress}
+              onTokenSelect={selectToken}
+              onTokenAdd={addToken}
+            />
+          )}
 
           {/* Contract Info Popover */}
           {contractAddress && isDeployed && (
