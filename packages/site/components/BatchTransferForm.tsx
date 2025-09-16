@@ -49,6 +49,8 @@ export function BatchTransferForm() {
   const {
     contractAddress,
     isDeployed,
+    transferConfidential,
+    canTransfer,
   } = useConfidentialToken({
     instance,
     fhevmDecryptionSignatureStorage: fhevmDecryptionSignatureStorage as any,
@@ -96,6 +98,17 @@ export function BatchTransferForm() {
       return;
     }
 
+    // Check if transferConfidential function is available
+    if (!transferConfidential) {
+      setMessage("Transfer function not available. Please check contract deployment.");
+      return;
+    }
+    
+    if (!canTransfer) {
+      setMessage("Transfer not allowed. Please check your permissions.");
+      return;
+    }
+
     const validRows = batchRows.filter(row => row.isValid);
     if (validRows.length === 0) {
       setMessage("No valid rows to process");
@@ -126,27 +139,18 @@ export function BatchTransferForm() {
       setProgress(50);
       setMessage("Submitting transaction...");
 
-      // Step 2: Call individual transfers (since batch function not available in current contract)
-      const tokenContract = new (await import("ethers")).Contract(
-        contractAddress,
-        [
-          "function transferConfidential(address to, externalEuint64 encAmount, bytes calldata proof) external"
-        ],
-        ethersSigner
-      );
-
+      // Step 2: Call individual transfers using hook function
       // Process transfers one by one
       for (let i = 0; i < validRows.length; i++) {
         const row = validRows[i];
         setProgress(50 + (i / validRows.length) * 40);
         setMessage(`Transferring to ${row.address}...`);
         
-        const tx = await tokenContract.transferConfidential(
-          row.address,
-          enc.handles[i],
-          enc.inputProof
-        );
-        await tx.wait();
+        // Use transferConfidential from hook
+        transferConfidential(row.address, parseFloat(row.amount));
+        
+        // Wait a bit between transfers to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
 
       setProgress(100);
@@ -273,7 +277,7 @@ export function BatchTransferForm() {
         {/* Transfer Button */}
         <Button
           onClick={handleBatchTransfer}
-          disabled={!instance || !ethersSigner || validRows.length === 0 || isProcessing}
+          disabled={!instance || !ethersSigner || !transferConfidential || !canTransfer || validRows.length === 0 || isProcessing}
           className="w-full"
           size="lg"
         >
