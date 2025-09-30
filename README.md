@@ -1,20 +1,63 @@
-# FHEVM React Template
+# FHEVM Confidential Token POC
 
-The FHEVM React Template is an ultra-minimal React project for building and running an FHEVM-enabled dApp.
-It works alongside the [fhevm-hardhat-template](https://github.com/zama-ai/fhevm-hardhat-template)
-and provides a simple development frontend for interacting with the `FHECounter.sol` contract.
+A comprehensive Proof of Concept (POC) for building confidential token applications using Fully Homomorphic Encryption for Ethereum Virtual Machine (FHEVM). This project demonstrates the implementation of privacy-preserving token operations including minting, transferring, burning, and batch operations with encrypted balances.
 
-This template also illustrates how to run your FHEVM-dApp on both Sepolia as well as a local Hardhat Node (much faster).
+## Overview
 
-> [!IMPORTANT]
-> Please follow the detailed installation instructions [below](#install).
+This project consists of two main components:
+1. **Smart Contract Layer**: Hardhat-based Solidity contracts implementing confidential token functionality
+2. **Frontend Layer**: Next.js React application providing a user-friendly interface for interacting with confidential tokens
 
-## Features
+The system enables users to perform token operations while keeping balances and amounts encrypted, ensuring complete privacy in financial transactions.
+
+## Key Features
+
+- **Confidential Token Operations**: Mint, transfer, burn, and batch operations with encrypted balances
+- **Factory Pattern**: Deploy new confidential tokens with custom slugs
+- **Registry System**: Track and manage multiple token deployments
+- **Allowance System**: Support for approved spending with encrypted amounts
+- **Batch Operations**: Efficient batch transfers for multiple recipients
+- **Cross-Chain Support**: Deployed on both Sepolia testnet and local Hardhat networks
+
+## Smart Contracts
+
+### Core Contracts
+
+1. **ConfidentialTokenExtended.sol** - Main confidential token contract
+   - Implements ERC-20-like functionality with encrypted balances
+   - Supports minting, transferring, burning, and batch operations
+   - Uses `euint64` for encrypted amounts with 6 decimal precision
+
+2. **CTFactory.sol** - Factory contract for deploying new tokens
+   - Allows users to deploy new confidential tokens with custom slugs
+   - Automatically transfers ownership to the deployer
+   - Registers tokens in the registry system
+
+3. **CTRegistry.sol** - Registry system for token management
+   - Tracks token deployments by owner and slug
+   - Supports versioning of token deployments
+   - Manages registrar permissions for factory operations
+
+### Deployed Contract Addresses
+
+#### Sepolia Testnet (Chain ID: 11155111)
+- **CTFactory**: `0x17AcAd1F404f0177B3fAEFd89Ad7977be595703E`
+- **CTRegistry**: `0x6992bB20B35F30D1F3d6450fAc460dA629535e97`
+
+> **Note**: ConfidentialToken instances are created dynamically through the Factory contract when users call `deployAndRegister()`. Each user can create their own token with a custom slug.
+
+#### Local Hardhat Network (Chain ID: 31337)
+- **ConfidentialToken**: `0x90791c8472d9262395d72c76572c8d6728F0dfF2`
+- **ConfidentialTokenExtended**: `0x90791c8472d9262395d72c76572c8d6728F0dfF2`
+
+## Technology Stack
 
 - **@zama-fhe/relayer-sdk**: Fully Homomorphic Encryption for Ethereum Virtual Machine
 - **React**: Modern UI framework for building interactive interfaces
 - **Next.js**: Next-generation frontend build tool
 - **Tailwind**: Utility-first CSS framework for rapid UI development
+- **Hardhat**: Ethereum development environment
+- **TypeScript**: Type-safe JavaScript development
 
 ## Requirements
 
@@ -139,18 +182,45 @@ To fix the view function result mismatch:
 
 By following these steps, you can ensure that MetaMask syncs correctly with your Hardhat node and avoid potential issues related to nonces and cached view function results.
 
-## Project Structure Overview
+## Project Structure
 
-### Key Files/Folders
+### Architecture
 
-- **`<root>/packages/site/fhevm`**: This folder contains the essential hooks needed to interact with FHEVM-enabled smart contracts. It is meant to be easily copied and integrated into any FHEVM + React project.
+```
+FHEVM-confidential-POC/
+├── packages/
+│   ├── fhevm-hardhat-template/     # Smart contract development
+│   │   ├── contracts/              # Solidity contracts
+│   │   ├── deploy/                 # Deployment scripts
+│   │   ├── scripts/                # Utility scripts
+│   │   └── test/                   # Contract tests
+│   └── site/                       # Frontend application
+│       ├── app/                    # Next.js app router
+│       ├── components/            # React components
+│       ├── fhevm/                  # FHEVM integration hooks
+│       ├── hooks/                  # Custom React hooks
+│       └── abi/                    # Contract ABIs and addresses
+```
 
-- **`<root>/packages/site/hooks/useFHECounter.tsx`**: A simple React custom hook that demonstrates how to use the `useFhevm` hook in a basic use case, serving as an example of integration.
+### Key Components
 
-### Secondary Files/Folders
+#### Smart Contract Layer (`packages/fhevm-hardhat-template/`)
+- **Contracts**: Confidential token implementations with FHEVM integration
+- **Deploy Scripts**: Automated deployment for multiple networks
+- **Tests**: Comprehensive test suite for contract functionality
 
-- **`<root>/packages/site/hooks/metamask`**: This folder includes hooks designed to manage the MetaMask Wallet provider. These hooks can be easily adapted or replaced to support other wallet providers, following the EIP-6963 standard,
-- Additionally, the project is designed to be flexible, allowing developers to easily replace `ethers.js` with a more React-friendly library of their choice, such as `Wagmi`.
+#### Frontend Layer (`packages/site/`)
+- **FHEVM Integration**: Essential hooks for FHEVM contract interaction
+- **UI Components**: Modern React components for token operations
+- **Wallet Integration**: MetaMask and other wallet provider support
+- **Token Management**: Interface for minting, transferring, and burning tokens
+
+### Development Workflow
+
+1. **Contract Development**: Write and test Solidity contracts in `fhevm-hardhat-template`
+2. **Deployment**: Deploy contracts to local or test networks
+3. **Frontend Integration**: Use generated ABIs and addresses in the React app
+4. **Testing**: Test confidential operations through the web interface
 
 ## Documentation
 
